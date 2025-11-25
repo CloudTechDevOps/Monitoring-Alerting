@@ -115,6 +115,15 @@ groups:
         annotations:
           summary: "Unauthorized requests on {{ $labels.instance }}"
           description: "Detected unauthorized (401/403) requests in the past 5 minutes."
+      - alert: HighDiskUsage
+        expr: (1 - (node_filesystem_avail_bytes{fstype!~"tmpfs|overlay"} 
+              / node_filesystem_size_bytes{fstype!~"tmpfs|overlay"})) * 100 > 80
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High Disk Usage on {{ $labels.instance }}"
+          description: "Disk usage is above 80% for more than 2 minutes. VALUE = {{ $value }}%"
 EOF
 
 # ============ 6. PagerDuty Integration ============

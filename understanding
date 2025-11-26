@@ -1,0 +1,230 @@
+
+
+[Node Exporter / App Servers] --metrics--> [Prometheus] --alerts--> [Alertmanager] --notifications--> PagerDuty / Email / Slack
+[Prometheus] <---metrics--- [Grafana]
+
+
+Step 1: Scrape Metrics
+
+Prometheus makes an HTTP request to the target server’s /metrics endpoint (e.g., Node Exporter on 9100).
+
+The target returns metrics in text format:
+
+node_cpu_seconds_total{instance="server1", mode="idle"} 12345.67
+node_memory_usage_bytes{instance="server1"} 567890
+
+
+Prometheus parses these lines and converts them into time series (metric + labels + timestamp + value).
+
+Step 2: Store Metrics in TSDB
+
+Prometheus writes the metric samples into its built-in time series database (TSDB).
+
+TSDB organizes data as:
+
+Metric name + labels → time series
+
+Chunks of consecutive samples for efficiency
+
+Indexes for fast lookup by label combinations
+
+Example time series stored:
+
+Metric Name	Labels	Timestamp	Value
+node_cpu_seconds_total	instance="server1", mode="idle"	2025-11-25 12:00	12345.7
+node_cpu_seconds_total	instance="server1", mode="idle"	2025-11-25 12:15	12346.1
+
+The TSDB is append-only, meaning new samples are just added sequentially.
+
+Step 3: Evaluate Rules
+
+Prometheus evaluates alerting and recording rules at every evaluation_interval:
+
+Alerting Rules
+
+Example: High CPU usage
+
+expr: 100 - (avg by(instance) (irate(node_cpu_seconds_total{mode="idle"}[5m])) * 100) > 40
+for: 2m
+
+
+Prometheus calculates this expression using the stored metrics.
+
+If the condition is true for the specified for duration, it fires an alert.
+
+Recording Rules
+
+Precomputes frequently used metrics for dashboards:
+
+- record: instance:cpu_usage:rate5m
+  expr: 100 - (avg by(instance) (irate(node_cpu_seconds_total{mode="idle"}[5m])) * 100)
+
+
+Stores these results as new time series in TSDB for faster queries.
+
+Step 4: Send Alerts to Alertmanager
+
+Fired alerts are sent to Alertmanager via HTTP API.
+
+Prometheus does not handle notifications directly; Alertmanager handles grouping, deduplication, silencing, and delivery (PagerDuty, Slack, email, etc.).
+
+Step 5: Serve Metrics to Clients
+
+Prometheus exposes metrics on its own HTTP endpoint (http://localhost:9090/metrics).
+
+Grafana or other tools query Prometheus via PromQL for dashboards or charts.
+
+Step 6: Repeat Continuously
+
+Prometheus repeats this process:
+
+Scrape targets every scrape_interval (e.g., 15s)
+
+Evaluate rules every evaluation_interval (e.g., 15s)
+
+Send alerts and update TSDB continuously
+
+Visual Flow
+[Target Server: Node Exporter]
+        │
+        │  metrics HTTP /metrics
+        ▼
+[Prometheus]
+  ├─ Store metrics in TSDB
+  ├─ Evaluate alerting rules
+  ├─ Evaluate recording rules
+  ├─ Send alerts to Alertmanager
+  └─ Serve metrics to Grafana
+
+
+💡 Analogy:
+
+Prometheus is like a watchful scientist:
+
+Measures everything periodically (scraping)
+
+Records observations carefully in a notebook (TSDB)
+
+Checks if conditions are dangerous (alert rules)
+
+Calls a responder if something is wrong (Alertmanager)
+
+Shares results with observers (Grafana)
+
+
+1️⃣ Chunks
+
+Definition:
+A chunk is a small, contiguous block of consecutive metric samples stored on disk.
+
+Why chunks?
+
+Writing every single metric sample directly to disk would be inefficient.
+
+By grouping samples into chunks, Prometheus can:
+
+Write efficiently in batches
+
+Compress data to save space
+
+Retrieve consecutive data quickly
+
+Example:
+
+Say Prometheus scrapes CPU usage every 15 seconds. For one time series:
+
+Timestamp	Value
+12:00	5
+12:15	7
+12:30	6
+12:45	8
+13:00	5
+
+Prometheus may store these 5 samples in one chunk.
+
+Older chunks are compacted into larger chunks for storage efficiency.
+
+Key points about chunks:
+
+Each chunk contains samples of a single time series.
+
+Chunks are append-only.
+
+Chunks have metadata (start time, end time) for fast access.
+
+2️⃣ Index
+
+Definition:
+The index is a data structure that allows Prometheus to quickly find which chunks belong to which time series.
+
+Why an index?
+
+Prometheus can have millions of time series (one per metric+label combination).
+
+Without an index, finding the data for node_cpu_seconds_total{instance="server1"} would require scanning all chunks — very slow.
+
+How it works:
+
+Each time series is identified by metric name + labels.
+
+The index stores a mapping:
+
+metric_name + labels → list of chunk locations on disk
+
+
+When PromQL queries data (e.g., CPU usage last 5 minutes), Prometheus:
+
+Looks up the time series in the index
+
+Retrieves the relevant chunks from disk
+
+Reads the samples from chunks
+
+Analogy:
+
+Chunks = pages of a notebook containing consecutive measurements.
+
+Index = table of contents that tells you which pages contain data for each metric+label combination.
+
+3️⃣ Combined Flow
+[Scrape metrics] 
+      │
+      ▼
+[Time series samples] → stored in [chunks]
+      │
+      ▼
+[index] keeps track: metric+labels → chunks locations
+      │
+      ▼
+[PromQL query] → check index → load chunks → return samples
+
+Key Notes
+
+Chunks = store actual metric samples
+
+Index = maps metric+labels → chunks for fast lookup
+
+Both together allow Prometheus to efficiently store millions of time series and answer queries quickly.
+
+Older chunks can be compacted, while the index is updated to reflect chunk locations.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

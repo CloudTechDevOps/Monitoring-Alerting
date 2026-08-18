@@ -116,6 +116,9 @@ EOF
 sudo tee /etc/alertmanager/alertmanager.yml >/dev/null <<'EOF'
 route:
   receiver: pagerduty
+  group_by:
+    - alertname
+    - instance
   group_wait: 10s
   group_interval: 10s
   repeat_interval: 1h
@@ -123,7 +126,7 @@ route:
 receivers:
   - name: pagerduty
     pagerduty_configs:
-      - routing_key: "7799d7de63d2430ad05f093fbdc87438"
+      - routing_key: "YOUR_PAGERDUTY_ROUTING_KEY"
         severity: "critical"
 EOF
 

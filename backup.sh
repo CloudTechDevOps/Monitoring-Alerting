@@ -71,6 +71,9 @@ sudo chown -R prometheus:prometheus /etc/alertmanager /var/lib/alertmanager
 sudo tee /etc/alertmanager/alertmanager.yml >/dev/null <<'EOF'
 route:
   receiver: pagerduty
+  group_by:
+    - alertname
+    - instance
   group_wait: 10s
   group_interval: 10s
   repeat_interval: 1h
@@ -78,8 +81,8 @@ route:
 receivers:
   - name: pagerduty
     pagerduty_configs:
-      - routing_key: "ccc18732490d460dc00dca79aa6fd7bd"
-        severity: "critical"
+      - routing_key: "YOUR_PAGERDUTY_ROUTING_KEY"
+        severity: "critical""
 EOF
 
 # Alertmanager service

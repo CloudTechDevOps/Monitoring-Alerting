@@ -11,6 +11,8 @@ is_installed() {
 }
 
 # ============ 1. System Prep ============
+sudo dpkg --configure -a
+sudo apt-get -f install
 sudo apt update && sudo apt upgrade -y
 sudo useradd --no-create-home --shell /bin/false prometheus || true
 sudo useradd --no-create-home --shell /bin/false node_exporter || true
